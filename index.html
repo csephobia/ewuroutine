@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Course Routine Generator</title>
+<style>
+  :root { --cell-padding: 1px; --radius:4px; }
+  body{font-family:system-ui,Segoe UI,Roboto,Arial; padding:5px; background:#fafafa;}
+  h2{text-align:center;margin:0px;}
+  textarea{box-sizing:border-box;font-family:monospace;}
+  button{padding:8px 12px;margin-top:8px;cursor:pointer;}
+  .wrap{margin-top:14px;}
+  table{width:fit-content;border-collapse:collapse;border:2px solid #222;background:#fff;margin: auto;}
+  th,td{border:1px solid #222;padding:var(--cell-padding);text-align:center;vertical-align:middle;}
+  th{background:#eee; font-weight:600;}
+  .course {
+    border-radius:6px; padding:6px; font-size:0.9rem; line-height:1.1;
+    /* box-shadow:0 2px 0 rgba(0,0,0,0.05) inset; */
+  }
+  .room{font-size:0.78rem; opacity:0.9}
+  .controls {display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .small{font-size:0.88rem;color:#444}
+</style>
+</head>
+<body>
+
+<h2>Course Routine Generator</h2>
+<!-- Md. Arman Hossain, Lecturer, CSE, EWU -->
+<div class="controls" >
+  <div style="position: relative;margin-left: auto;margin-right: auto;">
+    <div class="small">Paste your raw routine from <span style="color: red;">(Portal > Course List)</spans>:</div>
+    <textarea id="input" rows="10" cols="90">
+CSE405 Lab (7)	W 1:30PM-3:30PM & 450 (Networking Lab)	
+CSE405 (7)	MW 4:50PM-6:20PM & FUB-301	
+CSE405 (10)	S 3:10PM-4:40PM & AB3-301	
+CSE405 Lab (10)	S 4:50PM-6:50PM & 450 (Networking Lab)	
+CSE405 (10)	T 3:10PM-4:40PM & AB3-701	
+CSE479 (1)	SR 11:50AM-1:20PM & 227	
+CSE479 Lab (1)	T 10:10AM-12:10PM & 435 (Virtual Reality and Augmented Reality Lab)	
+CSE479 Lab (2)	T 1:30PM-3:09PM & 630 (Software Engineering Lab)	
+CSE479 (2)	S 1:30PM-3:00PM & 114	
+CSE479 (2)	R 1:30PM-3:00PM & 108
+    </textarea>
+  </div>
+  <!-- <div style="">
+    
+  </div> -->
+</div>
+<button style="margin: auto; display: block;" id="gen">Generate Routine</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<div id="result" class="wrap"></div>
+<br><button style="margin: auto; display: block;" onclick='downloadImage()'>Download Image</button>
+<script>
+
+const DAY_CODES = ["S","M","T","W","R"];
+const DAY_NAMES = {S:"Sunday",M:"Monday",T:"Tuesday",W:"Wednesday",R:"Thursday"};
+
+function toMinutes(t){
+  // accepts "1:30PM" or "12:10AM" (case-insensitive)
+  const m = t.match(/^\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$/i);
+  if(!m) return NaN;
+  let h = parseInt(m[1],10), mm = parseInt(m[2],10);
+  const ampm = (m[3]||"").toUpperCase();
+  if(ampm === "PM" && h !== 12) h += 12;
+  if(ampm === "AM" && h === 12) h = 0;
+  return h*60 + mm;
+}
+function fmt(mins){
+  let h = Math.floor(mins/60), m = mins%60;
+  let ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12; if(h === 0) h = 12;
+  return `${h}:${String(m).padStart(2,"0")}${ampm}`;
+}
+
+let courseColors = {};
+function getCourseColor(key){
+  if(courseColors[key]) return courseColors[key];
+  const n = Object.keys(courseColors).length;
+  const hue = (n * 137.508) % 360;
+  const color = `hsl(${Math.round(hue)},65%,85%)`;
+  courseColors[key] = color;
+  return color;
+}
+
+/* parse a single line. expected pattern:
+   <course>  <DAYCODES> <START-END> & <room text>
+   example: "CSE479 (1)\tSR 11:50AM-1:20PM & 227"
+*/
+function parseLine(line){
+  line = line.trim();
+  if(!line) return null;
+  const re = /^(.+?)\s+([SMTRW]+)\s+(\d{1,2}:\d{2}\s*(?:AM|PM)-\d{1,2}:\d{2}\s*(?:AM|PM))\s*&\s*(.+)$/i;
+  const m = line.match(re);
+  if(!m) return null;
+  const course = m[1].trim();
+  const days = m[2].toUpperCase().split("").filter(ch => "SMTRW".includes(ch));
+  const time = m[3].replace(/\s+/g, "");
+  const [t1,t2] = time.split("-");
+  const start = toMinutes(t1);
+  const end = toMinutes(t2);
+  const room = m[4].trim();
+  if(isNaN(start) || isNaN(end)) return null;
+  return { course, days, start, end, room };
+}
+
+function generateRoutineFromText(text){
+  courseColors = {};
+  const lines = text.split("\n").map(l=>l.trim()).filter(Boolean);
+  const entries = lines.map(parseLine).filter(Boolean);
+
+  const timeSet = new Set();
+  entries.forEach(e => { timeSet.add(e.start); timeSet.add(e.end); });
+  if(timeSet.size === 0) return "<div class='small'>No valid entries found.</div>";
+
+  const sortedTimes = Array.from(timeSet).sort((a,b)=>a-b);
+  const numCols = sortedTimes.length - 1;
+
+  const grid = {};
+  DAY_CODES.forEach(d => grid[d] = new Array(numCols).fill(null));
+
+  function findStartIndex(min){
+    for(let i=0;i<sortedTimes.length-1;i++){
+      if(sortedTimes[i] === min) return i;
+      if(sortedTimes[i] < min && min < sortedTimes[i+1]) return i;
+    }
+    for(let i=0;i<sortedTimes.length-1;i++) if(sortedTimes[i] <= min && min <= sortedTimes[i+1]) return i;
+    return -1;
+  }
+  function findEndIndex(min){
+    for(let k=0;k<sortedTimes.length-1;k++){
+      if(sortedTimes[k+1] === min) return k;
+      if(sortedTimes[k] < min && min < sortedTimes[k+1]) return k;
+    }
+    for(let k=0;k<sortedTimes.length-1;k++) if(sortedTimes[k] <= min && min <= sortedTimes[k+1]) return k;
+    return -1;
+  }
+
+  entries.forEach(e => {
+    const color = getCourseColor(e.course.replace("Lab ",""));
+    e.days.forEach(d => {
+      if(!grid[d]) return; // ignore unknown days
+      const si = findStartIndex(e.start);
+      const ei = findEndIndex(e.end);
+      if(si < 0 || ei < 0 || ei < si) return;
+      const colspan = ei - si + 1;
+      // if existing will get overwrite (can be enhanced to check collisions)
+      grid[d][si] = { type: "course", colspan, color, course: e.course, start:e.start, end:e.end, room: e.room };
+      for(let k = si+1; k <= ei; k++) grid[d][k] = { type: "spanned" };
+    });
+  });
+
+  let html = "<table>";
+  html += "<thead><tr><th>Day</th>";
+  for(let i=0;i<numCols;i++){
+    html += `<th>${fmt(sortedTimes[i]).replace("AM","").replace("PM","")}-${fmt(sortedTimes[i+1]).replace("AM","").replace("PM","")}</th>`;
+  }
+  html += "</tr></thead><tbody>";
+
+  DAY_CODES.forEach(d => {
+    html += `<tr><th>${DAY_NAMES[d]}</th>`;
+    for(let i=0;i<numCols;i++){
+      const cell = grid[d][i];
+      if(cell === null){
+        html += `<td></td>`;
+      } else if(cell.type === "spanned"){
+        continue;
+      } else if(cell.type === "course"){
+        const cs = cell.colspan;
+        const color = cell.color;
+        html += `<td colspan="${cs}" style="background:${color}" title="${fmt(cell.start)} - ${fmt(cell.end)}"><div class="course">` +
+                `<div style="font-weight:700">${escapeHtml(cell.course)}</div>` +
+                `<div class="room">${escapeHtml(cell.room)}</div>` +
+                `</div></td>`;
+        i += (cs - 1);
+      } else {
+        html += `<td></td>`;
+      }
+    }
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  return html;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'": '&#39;' }[c]));
+}
+
+document.getElementById("gen").addEventListener("click", () => {
+  const src = document.getElementById("input").value;
+  const out = generateRoutineFromText(src);
+  document.getElementById("result").innerHTML = out;
+});
+
+document.getElementById("gen").click();
+
+function downloadImage(){
+  const node=document.querySelector("#result");
+  html2canvas(node).then(canvas=>{
+    const link=document.createElement("a");
+    link.download="routine.png"; link.href=canvas.toDataURL("image/png"); link.click();
+  });
+}
+</script>
+</body>
+</html>
