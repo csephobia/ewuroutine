@@ -163,19 +163,19 @@ function generateRoutineFromText(text){
     for(let i=0;i<numCols;i++){
       const cell = grid[d][i];
       if(cell === null){
-        html += `<td></td>`;
+        html += `<td contenteditable="true" ></td>`;
       } else if(cell.type === "spanned"){
         continue;
       } else if(cell.type === "course"){
         const cs = cell.colspan;
         const color = cell.color;
-        html += `<td colspan="${cs}" style="background:${color}" title="${fmt(cell.start)} - ${fmt(cell.end)}"><div class="course">` +
+        html += `<td contenteditable="true" colspan="${cs}" style="background:${color}" title="${fmt(cell.start)} - ${fmt(cell.end)}"><div class="course">` +
                 `<div style="font-weight:700">${escapeHtml(cell.course)}</div>` +
                 `<div class="room">${escapeHtml(cell.room)}</div>` +
                 `</div></td>`;
         i += (cs - 1);
       } else {
-        html += `<td></td>`;
+        html += `<td contenteditable="true" ></td>`;
       }
     }
     html += "</tr>";
