@@ -12,7 +12,10 @@
   button{padding:8px 12px;margin-top:8px;cursor:pointer;}
   .wrap{margin-top:14px;}
   table{width:fit-content;border-collapse:collapse;border:2px solid #222;background:#fff;margin: auto;}
-  th,td{border:1px solid #222;padding:var(--cell-padding);text-align:center;vertical-align:middle;}
+  th,td{border:1px solid #222;padding:var(--cell-padding);text-align:center;vertical-align:middle;
+  /* min-width: 95px; */
+  max-width: 100px;
+  }
   th{background:#eee; font-weight:600;}
   .course {
     border-radius:6px; padding:6px; font-size:0.9rem; line-height:1.1;
@@ -55,7 +58,7 @@ CSE479 (2)	R 1:30PM-3:00PM & 108
 <script>
 
 const DAY_CODES = ["S","M","T","W","R"];
-const DAY_NAMES = {S:"Sunday",M:"Monday",T:"Tuesday",W:"Wednesday",R:"Thursday"};
+const DAY_NAMES = {S:"Sun<br>day",M:"Mon<br>day",T:"Tues<br>day",W:"Wednes<br>day",R:"Thurs<br>day"};
 
 function toMinutes(t){
   // accepts "1:30PM" or "12:10AM" (case-insensitive)
@@ -195,16 +198,51 @@ document.getElementById("gen").addEventListener("click", () => {
   document.getElementById("result").innerHTML = out;
 });
 
-document.getElementById("gen").click();
+
+
+const STORAGE_KEY = "routineData";
+
+function saveRoutine(inputText, tableHTML) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    input: inputText,
+    table: tableHTML,
+    savedAt: new Date().toISOString()
+  }));
+}
 
 function downloadImage(){
-  const node=document.querySelector("#result");
+  const node=document.querySelector("#result table");
   html2canvas(node).then(canvas=>{
     const link=document.createElement("a");
     link.download="routine.png"; link.href=canvas.toDataURL("image/png"); link.click();
   });
+  
+  saveRoutine(document.getElementById('input').value, document.getElementById("result").innerHTML);
 }
+
+function loadRoutine() {
+  const data = localStorage.getItem(STORAGE_KEY);
+  return data ? JSON.parse(data) : null;
+}
+
+function clearRoutine() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+window.addEventListener('load', ()=>{
+  const saved = loadRoutine();
+  if(saved) {
+    const useSaved = confirm("Your last downloaded routine was found from " + new Date(saved.savedAt).toLocaleString() + 
+      ".\nDo you want to load it?");
+    if(useSaved) {
+      document.getElementById('input').value = saved.input;
+      document.getElementById('result').innerHTML = saved.table;
+    }
+  }
+  else{
+    document.getElementById("gen").click();
+  }
+});
 </script>
 </body>
 </html>
-
