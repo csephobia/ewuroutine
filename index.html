@@ -152,14 +152,14 @@ function generateRoutineFromText(text){
   });
 
   let html = "<table>";
-  html += "<thead><tr><th>Day</th>";
+  html += "<thead><tr><th contenteditable='true'>Day</th>";
   for(let i=0;i<numCols;i++){
-    html += `<th>${fmt(sortedTimes[i]).replace("AM","").replace("PM","")}-${fmt(sortedTimes[i+1]).replace("AM","").replace("PM","")}</th>`;
+    html += `<th contenteditable="true">${fmt(sortedTimes[i]).replace("AM","").replace("PM","")}-${fmt(sortedTimes[i+1]).replace("AM","").replace("PM","")}</th>`;
   }
   html += "</tr></thead><tbody>";
 
   DAY_CODES.forEach(d => {
-    html += `<tr><th>${DAY_NAMES[d]}</th>`;
+    html += `<tr><th contenteditable="true">${DAY_NAMES[d]}</th>`;
     for(let i=0;i<numCols;i++){
       const cell = grid[d][i];
       if(cell === null){
@@ -207,3 +207,4 @@ function downloadImage(){
 </script>
 </body>
 </html>
+
